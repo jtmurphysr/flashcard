@@ -23,7 +23,7 @@ A versatile flashcard application for learning languages, memorizing facts, stud
 
 2. Install the required dependencies:
    ```
-   pip install pandas tkinter sqlite3
+   pip install -r requirements.txt
    ```
 
 3. Run the launcher application:
@@ -33,7 +33,7 @@ A versatile flashcard application for learning languages, memorizing facts, stud
 
 ## Database Structure
 
-The application uses SQLite to store flashcards and track progress:
+The application uses SQLite to store flashcards and track progress. All flashcard data is stored in a local database file (flashcards.db):
 
 - **flashcards table**:
   - `id`: Unique identifier for each card
@@ -46,72 +46,59 @@ The application uses SQLite to store flashcards and track progress:
 
 ## Spaced Repetition System
 
-The application implements a simple spaced repetition system:
-- Cards are shown more frequently when new or answered incorrectly
+The application implements a smart spaced repetition system:
+- New cards and incorrectly answered cards are shown more frequently
 - Each correct answer increases the interval before the card appears again
 - Interval = correct_count * 7 days
-- Incorrect answers decrease the correct_count
+- Incorrect answers decrease the correct_count by 1 (minimum 0)
+- Cards are automatically scheduled based on your performance
 
-## CSV File Structure
+## Adding New Flashcards
 
-To create your own flashcard sets, you'll need to prepare a CSV file with the appropriate structure. The CSV file must have at least two columns, with headers that match the "front_lang" and "back_lang" values you specify in the launcher.
+### Using the Launcher
 
-### Example CSV Structures
+1. Click "Add New Set" in the launcher
+2. Enter a name for your set (e.g., "Spanish Vocabulary")
+3. Either:
+   - Browse to select a CSV file for import
+   - Or manually add cards through the interface
+4. Specify the languages/categories for the front and back of cards
+5. Click "Save"
 
-#### Language Learning (e.g., Italian_500.csv)
+### Importing from CSV
+
+You can import flashcards from CSV files. The CSV should have two columns:
+
 ```csv
-Italian,English
+target_word,native_word
 ciao,hello
 grazie,thank you
-buongiorno,good morning
-gatto,cat
 ```
 
-#### Chemistry Elements (e.g., chemistry_elements.csv)
-```csv
-Element,Symbol,AtomicNumber
-Hydrogen,H,1
-Helium,He,2
-Lithium,Li,3
-Beryllium,Be,4
-```
-*Note: When using this set, set front_lang="Element" and back_lang="Symbol"*
-
-#### Mathematical Formulas (e.g., math_formulas.csv)
-```csv
-Formula,Description
-a² + b² = c²,Pythagorean theorem
-E = mc²,Einstein's mass-energy equivalence
-F = ma,Newton's second law
-```
+The application will:
+1. Create new database entries for each word pair
+2. Initialize tracking data (correct_count, timestamps, etc.)
+3. Begin scheduling the cards based on the spaced repetition system
 
 ## Using the Application
 
 ### Launcher
 
-The launcher is the main entry point for the application. It allows you to:
-- Select a flashcard set to study
-- Add new flashcard sets
-- Edit existing sets
-- View statistics for each set
+The launcher provides:
+- Flashcard set management
+- Progress statistics for each set
+- Import/export functionality
+- Set configuration
 
 ### Studying Flashcards
 
-When studying flashcards:
-1. The front of the card is shown first
-2. After 5 seconds, the card flips automatically to show the answer
-3. You can mark cards as "Known" using the checkmark button
-4. Cards marked as "Known" are saved to a separate file and removed from the current rotation
-5. You can review unknown cards by clicking the X button
-
-### Adding Custom Sets
-
-To add a new flashcard set:
-1. Click "Add New Set" in the launcher
-2. Enter a name for your set (e.g., "Spanish Vocabulary")
-3. Browse to select your CSV file
-4. Specify the column names for the front and back of cards
-5. Click "Save"
+When studying:
+1. Cards are presented based on their review schedule
+2. The front of the card is shown for 5 seconds
+3. The card automatically flips to show the answer
+4. Mark your response:
+   - ✓ (Correct): Increases interval and correct_count
+   - ✗ (Incorrect): Decreases interval and correct_count
 
 ## Project Structure
 
