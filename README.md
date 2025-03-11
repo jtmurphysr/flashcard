@@ -8,8 +8,10 @@ A versatile flashcard application for learning languages, memorizing facts, stud
 - **Progress Tracking**: Automatically saves your progress for each study set
 - **Multiple Sets**: Maintain different flashcard collections for various subjects
 - **User-Friendly Interface**: Clean, intuitive design with minimal distractions
-- **Spaced Repetition**: Focus on cards you don't know while moving known items out of rotation
+- **Spaced Repetition**: Cards appear less frequently as you learn them (7-day multiplier per correct answer)
 - **Customizable**: Add your own sets by creating simple CSV files
+- **Persistent Storage**: SQLite database maintains progress across sessions
+- **Error Handling**: Robust error recovery and user-friendly error messages
 
 ## Installation
 
@@ -21,13 +23,34 @@ A versatile flashcard application for learning languages, memorizing facts, stud
 
 2. Install the required dependencies:
    ```
-   pip install pandas tkinter
+   pip install pandas tkinter sqlite3
    ```
 
 3. Run the launcher application:
    ```
    python flashcard_launcher.py
    ```
+
+## Database Structure
+
+The application uses SQLite to store flashcards and track progress:
+
+- **flashcards table**:
+  - `id`: Unique identifier for each card
+  - `target_word`: Word in the language being learned
+  - `native_word`: Translation in native language
+  - `last_displayed`: Timestamp of last review
+  - `last_correct`: Timestamp of last correct answer
+  - `correct_count`: Number of times answered correctly
+  - `created_at`: Card creation timestamp
+
+## Spaced Repetition System
+
+The application implements a simple spaced repetition system:
+- Cards are shown more frequently when new or answered incorrectly
+- Each correct answer increases the interval before the card appears again
+- Interval = correct_count * 7 days
+- Incorrect answers decrease the correct_count
 
 ## CSV File Structure
 

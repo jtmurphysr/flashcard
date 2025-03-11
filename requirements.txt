@@ -1,0 +1,18 @@
+# Core dependencies
+pandas>=2.2.3  # Required for data handling
+numpy>=2.2.3   # Required by pandas
+
+# Not needed for core functionality:
+# blessed==1.20.0        # Not used in the application
+# editor==1.6.6         # Not used in the application
+# inquirer==3.4.0       # Not used in the application
+# readchar==4.2.1       # Not used in the application
+# runs==1.2.2          # Not used in the application
+# wcwidth==0.2.13      # Not used in the application
+# xmod==1.8.1          # Not used in the application
+
+# These are sub-dependencies of pandas, will be installed automatically:
+# python-dateutil==2.9.0.post0
+# pytz==2025.1
+# six==1.17.0
+# tzdata==2025.1 

@@ -1,6 +1,7 @@
 from tkinter import Tk, Canvas, PhotoImage, Button
 import pandas as pd
 import random
+import sqlite3
 
 
 class FlashcardApp:
@@ -11,46 +12,31 @@ class FlashcardApp:
     FLIP_DELAY = 5000  # Time before card flips (ms)
     NEXT_CARD_DELAY = 3000  # Time before next card appears after flip (ms)
     
-    def __init__(self, data_file="data/Italian_500 .csv", front_lang="Italian", back_lang="English"):
-        """Initialize the flashcard application.
+    def __init__(self, db_path='flashcards.db', days_multiplier=7):
+        """Initialize the flashcard application."""
+        print(f"Connecting to database: {db_path}")  # Debug print
+        self.conn = sqlite3.connect(db_path)
         
-        Args:
-            data_file (str): Path to the CSV file containing word pairs
-            front_lang (str): The language to display on the front of cards
-            back_lang (str): The language to display on the back of cards
-        """
-        self.data_file = data_file
-        self.front_lang = front_lang
-        self.back_lang = back_lang
-        self.words = self._load_words(data_file)
+        # Test the connection
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM flashcards')
+        count = cursor.fetchone()[0]
+        print(f"Found {count} cards in database")  # Debug print
+        
+        self.days_multiplier = days_multiplier
+        self.current_cards = []
         self.current_card = None
+        self.front_lang = "Italian"
+        self.back_lang = "English"
         self.flip_timer = None
         self.next_card_timer = None
         
         # Set up the UI
         self._setup_ui()
         
-        # Display the first card
+        # Load cards and display the first one
+        self._load_cards()
         self.next_card()
-    
-    def _load_words(self, data_file):
-        """Load word pairs from a CSV file.
-        
-        Args:
-            data_file (str): Path to the CSV file containing word pairs
-            
-        Returns:
-            list: A list of dictionaries with word pairs
-            
-        Raises:
-            SystemExit: If the file is not found
-        """
-        try:
-            data = pd.read_csv(data_file)
-            return data.to_dict(orient="records")
-        except FileNotFoundError:
-            print(f"Error: File '{data_file}' not found")
-            exit(1)
     
     def _setup_ui(self):
         """Set up the user interface."""
@@ -78,7 +64,7 @@ class FlashcardApp:
         unknown_button = Button(
             image=cross_image, 
             highlightthickness=0, 
-            command=self.flip_card,
+            command=self.mark_unknown,
             bg=self.BACKGROUND_COLOR
         )
         unknown_button.grid(row=1, column=0)
@@ -96,40 +82,32 @@ class FlashcardApp:
         unknown_button.image = cross_image
         known_button.image = check_image
     
-    def pick_word(self):
-        """Select a random word from the available words.
-        
-        Returns:
-            dict: A dictionary containing the word pair
-        """
-        if not self.words:
-            # If all words are known, show a congratulatory message
-            self._show_completion_message()
-            return None
-            
-        return random.choice(self.words)
-    
-    def _show_completion_message(self):
-        """Show a message when all words have been learned."""
-        self.canvas.itemconfig(self.card_title, text="Congratulations!", fill="black")
-        self.canvas.itemconfig(self.card_word, text="You've learned all words!", fill="black")
+    def _load_cards(self):
+        """Load cards that are due for review."""
+        from load_db import get_cards_for_review
+        self.current_cards = get_cards_for_review(self.conn, self.days_multiplier)
+        print(f"Loaded {len(self.current_cards)} cards for review")  # Debug print
+        for card in self.current_cards[:3]:  # Print first 3 cards as sample
+            print(f"Card: {card}")
+        random.shuffle(self.current_cards)
     
     def next_card(self):
         """Display the next flashcard."""
-        # Cancel any existing timers
+        if not self.current_cards:
+            self._load_cards()
+            if not self.current_cards:
+                self.show_completion_message()
+                return
+
         self._cancel_timers()
+        self.current_card = self.current_cards.pop()
         
-        # Get a new word
-        self.current_card = self.pick_word()
-        if not self.current_card:
-            return
-            
-        # Update the UI to show the front of the card
+        # Update display
         self.canvas.itemconfig(self.card_background, image=self.card_front_img)
         self.canvas.itemconfig(self.card_title, text=self.front_lang, fill="black")
-        self.canvas.itemconfig(self.card_word, text=self.current_card[self.front_lang], fill="black")
+        self.canvas.itemconfig(self.card_word, text=self.current_card['target_word'], fill="black")
         
-        # Set a timer to flip the card automatically
+        # Set flip timer
         self.flip_timer = self.window.after(self.FLIP_DELAY, self.flip_card)
     
     def flip_card(self):
@@ -145,52 +123,48 @@ class FlashcardApp:
         # Update the UI to show the back of the card
         self.canvas.itemconfig(self.card_background, image=self.card_back_img)
         self.canvas.itemconfig(self.card_title, text=self.back_lang, fill="white")
-        self.canvas.itemconfig(self.card_word, text=self.current_card[self.back_lang], fill="white")
+        self.canvas.itemconfig(self.card_word, text=self.current_card['native_word'], fill="white")
         
         # Set a timer to show the next card automatically
         self.next_card_timer = self.window.after(self.NEXT_CARD_DELAY, self.next_card)
     
     def mark_known(self):
-        """Mark the current word as known, save to known_words.json, and proceed to the next word."""
+        """Mark the current card as known."""
+        if not self.current_card:
+            print("No current card to mark as known!")  # Debug print
+            return
+
+        print(f"Current card before update: {self.current_card}")  # Debug print
+        
+        cursor = self.conn.cursor()
+        # Check current status
+        cursor.execute('SELECT * FROM flashcards WHERE id = ?', (self.current_card['id'],))
+        before = cursor.fetchone()
+        print(f"Database state before update: {before}")  # Debug print
+
+        from load_db import update_card_status
+        update_card_status(self.conn, self.current_card['id'], correct=True)
+        
+        # Verify the update
+        cursor.execute('SELECT * FROM flashcards WHERE id = ?', (self.current_card['id'],))
+        after = cursor.fetchone()
+        print(f"Database state after update: {after}")  # Debug print
+        
+        self.next_card()
+    
+    def mark_unknown(self):
+        """Mark the current card as unknown."""
         if not self.current_card:
             return
-            
-        # Define the known words file path
-        import os
-        import json
-        from tkinter import messagebox
-        
-        # Get the directory of the data file
-        data_dir = os.path.dirname(os.path.abspath(self.data_file))
-        # Create a filename based on the original data file name
-        base_name = os.path.splitext(os.path.basename(self.data_file))[0]
-        known_file = os.path.join(data_dir, f"{base_name}_known_words.json")
-        
-        try:
-            # Load existing known words
-            try:
-                with open(known_file, "r") as data_file:
-                    known_words = json.load(data_file)
-            except FileNotFoundError:
-                # If the file does not exist, start with an empty list
-                known_words = []
-                
-            # Add the current card to known words
-            known_words.append(self.current_card)
-            
-            # Save updated known words back to the file
-            with open(known_file, "w") as data_file:
-                json.dump(known_words, data_file, indent=4)
-                
-            # Remove the word from the current deck
-            if self.current_card in self.words:
-                self.words.remove(self.current_card)
-                
-        except Exception as e:
-            messagebox.showerror(title="Error", message=f"Could not save known word: {str(e)}")
-            
-        # Move to next card
+
+        from load_db import update_card_status
+        update_card_status(self.conn, self.current_card['id'], correct=False)
         self.next_card()
+    
+    def show_completion_message(self):
+        """Show a message when all cards are completed."""
+        self.canvas.itemconfig(self.card_title, text="Great job!", fill="black")
+        self.canvas.itemconfig(self.card_word, text="No more cards to review\nfor now!", fill="black")
     
     def _cancel_timers(self):
         """Cancel any active timers to prevent memory leaks."""
