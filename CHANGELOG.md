@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0] - 2024-03-XX
+## [1.1.0] - 2024-03-11
 
 ### Added
 - SQLite database integration for persistent storage
