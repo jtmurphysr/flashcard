@@ -174,43 +174,69 @@ def update_card_status(conn, card_id, correct=True):
     cursor = conn.cursor()
     now = datetime.now().isoformat()
     
-    print(f"Updating card {card_id}, correct={correct}")  # Debug print
+    print(f"\nAttempting to update card {card_id} (correct={correct})")  # Debug
     
-    if correct:
-        sql = '''
-        UPDATE flashcards
-        SET last_displayed = ?,
-            last_correct = ?,
-            correct_count = correct_count + 1
-        WHERE id = ?
-        '''
-        params = (now, now, card_id)
-    else:
-        sql = '''
-        UPDATE flashcards
-        SET last_displayed = ?,
-            correct_count = CASE 
-                WHEN correct_count > 0 THEN correct_count - 1
-                ELSE 0
-            END
-        WHERE id = ?
-        '''
-        params = (now, card_id)
-    
-    print(f"Executing SQL: {sql}")  # Debug print
-    print(f"With parameters: {params}")  # Debug print
-    
-    cursor.execute(sql, params)
-    rows_affected = cursor.rowcount
-    print(f"Rows affected by update: {rows_affected}")  # Debug print
-    
-    conn.commit()
-    print("Changes committed to database")  # Debug print
-    
-    # Verify the update
-    cursor.execute('SELECT * FROM flashcards WHERE id = ?', (card_id,))
-    result = cursor.fetchone()
-    print(f"Card state after update: {result}")  # Debug print
+    try:
+        if correct:
+            sql = '''
+                UPDATE flashcards
+                SET last_displayed = ?,
+                    last_correct = ?,
+                    correct_count = correct_count + 1
+                WHERE id = ?
+            '''
+            params = (now, now, card_id)
+        else:
+            sql = '''
+                UPDATE flashcards
+                SET last_displayed = ?,
+                    correct_count = CASE 
+                        WHEN correct_count > 0 THEN correct_count - 1
+                        ELSE 0
+                    END
+                WHERE id = ?
+            '''
+            params = (now, card_id)
+        
+        print(f"Executing SQL: {sql}")  # Debug
+        print(f"Parameters: {params}")   # Debug
+        
+        cursor.execute(sql, params)
+        
+        # Check if any rows were affected
+        rows_affected = cursor.rowcount
+        print(f"Rows affected: {rows_affected}")  # Debug
+        
+        if rows_affected == 0:
+            print(f"Warning: No rows were updated for card_id {card_id}")
+            # Verify the card exists
+            cursor.execute('SELECT * FROM flashcards WHERE id = ?', (card_id,))
+            card = cursor.fetchone()
+            if card:
+                print(f"Card exists but wasn't updated: {card}")
+            else:
+                print(f"Card with id {card_id} not found in database")
+            raise sqlite3.Error(f"No card found with id {card_id}")
+            
+        conn.commit()
+        print("Changes committed to database")  # Debug
+        
+        # Verify the update
+        cursor.execute('SELECT * FROM flashcards WHERE id = ?', (card_id,))
+        result = cursor.fetchone()
+        if result:
+            print(f"Card after update: {result}")  # Debug
+        else:
+            raise sqlite3.Error(f"Card {card_id} not found after update")
+            
+    except sqlite3.Error as e:
+        print(f"SQLite error occurred: {e}")  # Debug
+        conn.rollback()
+        raise e
+    except Exception as e:
+        print(f"Unexpected error occurred: {e}")  # Debug
+        conn.rollback()
+        raise e
 
 
 def main():

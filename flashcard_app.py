@@ -21,14 +21,23 @@ class FlashcardApp:
             back_lang (str): Label for the back of the cards
             days_multiplier (int): Number of days to multiply by correct_count for spacing
         """
-        print(f"Connecting to database: {db_path}")
-        self.conn = sqlite3.connect(db_path)
-        
-        # Test the connection
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM flashcards')
-        count = cursor.fetchone()[0]
-        print(f"Found {count} cards in database")
+        try:
+            self.conn = sqlite3.connect(db_path)
+            print(f"Connecting to database: {db_path}")
+            
+            # Test the connection
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM flashcards')
+            count = cursor.fetchone()[0]
+            print(f"Found {count} cards in database")
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            print("Creating a new database...")
+            from load_db import create_flashcards_db
+            self.conn = create_flashcards_db(db_path)
+        except Exception as e:
+            print(f"Fatal error: {e}")
+            raise SystemExit(1)
         
         self.days_multiplier = days_multiplier
         self.current_cards = []
@@ -91,11 +100,17 @@ class FlashcardApp:
     
     def _load_cards(self):
         """Load cards that are due for review."""
-        from load_db import get_cards_for_review
-        self.current_cards = get_cards_for_review(self.conn, self.days_multiplier)
-        print(f"Loaded {len(self.current_cards)} cards for review")  # Debug print
-        for card in self.current_cards[:3]:  # Print first 3 cards as sample
-            print(f"Card: {card}")
+        try:
+            from load_db import get_cards_for_review
+            self.current_cards = get_cards_for_review(self.conn, self.days_multiplier)
+            print(f"Loaded {len(self.current_cards)} cards for review")
+            for card in self.current_cards[:3]:
+                print(f"Card: {card}")
+        except sqlite3.Error as e:
+            print(f"Error loading cards: {e}")
+            self.current_cards = []
+            self.show_error_message("Database Error", 
+                                  "Could not load cards from database.")
         random.shuffle(self.current_cards)
     
     def next_card(self):
@@ -135,38 +150,76 @@ class FlashcardApp:
         # Set a timer to show the next card automatically
         self.next_card_timer = self.window.after(self.NEXT_CARD_DELAY, self.next_card)
     
+    def _check_connection(self):
+        """Verify database connection is still valid."""
+        try:
+            self.conn.execute("SELECT 1")
+            return True
+        except sqlite3.Error:
+            try:
+                print("Reconnecting to database...")
+                self.conn = sqlite3.connect(self.db_path)
+                return True
+            except sqlite3.Error as e:
+                print(f"Database connection error: {e}")
+                self.show_error_message("Database Error", 
+                                      "Lost connection to database. Please restart the application.")
+                return False
+
     def mark_known(self):
         """Mark the current card as known."""
         if not self.current_card:
-            print("No current card to mark as known!")  # Debug print
+            print("No current card to mark as known!")
             return
 
-        print(f"Current card before update: {self.current_card}")  # Debug print
+        print(f"\nMarking card as known: {self.current_card}")  # Debug
         
-        cursor = self.conn.cursor()
-        # Check current status
-        cursor.execute('SELECT * FROM flashcards WHERE id = ?', (self.current_card['id'],))
-        before = cursor.fetchone()
-        print(f"Database state before update: {before}")  # Debug print
+        try:
+            # Verify card exists in database before update
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT * FROM flashcards WHERE id = ?', (self.current_card['id'],))
+            before = cursor.fetchone()
+            print(f"Card before update: {before}")  # Debug
 
-        from load_db import update_card_status
-        update_card_status(self.conn, self.current_card['id'], correct=True)
-        
-        # Verify the update
-        cursor.execute('SELECT * FROM flashcards WHERE id = ?', (self.current_card['id'],))
-        after = cursor.fetchone()
-        print(f"Database state after update: {after}")  # Debug print
-        
-        self.next_card()
+            from load_db import update_card_status
+            update_card_status(self.conn, self.current_card['id'], correct=True)
+            
+            # Verify update
+            cursor.execute('SELECT * FROM flashcards WHERE id = ?', (self.current_card['id'],))
+            after = cursor.fetchone()
+            print(f"Card after update: {after}")  # Debug
+            
+        except sqlite3.Error as e:
+            print(f"Database error in mark_known: {e}")
+            self.show_error_message("Update Error", str(e))
+        except Exception as e:
+            print(f"Unexpected error in mark_known: {e}")
+            self.show_error_message("Error", str(e))
+        finally:
+            self.next_card()
     
     def mark_unknown(self):
         """Mark the current card as unknown."""
         if not self.current_card:
+            print("No current card to mark as unknown!")
             return
 
-        from load_db import update_card_status
-        update_card_status(self.conn, self.current_card['id'], correct=False)
-        self.next_card()
+        if not self._check_connection():
+            return
+
+        try:
+            from load_db import update_card_status
+            update_card_status(self.conn, self.current_card['id'], correct=False)
+        except sqlite3.Error as e:
+            print(f"Error updating card status: {e}")
+            self.show_error_message("Update Error", 
+                                  "Could not update card status.")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            self.show_error_message("Error", 
+                                  "An unexpected error occurred.")
+        finally:
+            self.next_card()
     
     def show_completion_message(self):
         """Show a message when all cards are completed."""
@@ -183,9 +236,31 @@ class FlashcardApp:
             self.window.after_cancel(self.next_card_timer)
             self.next_card_timer = None
     
+    def show_error_message(self, title, message):
+        """Display an error message to the user."""
+        from tkinter import messagebox
+        messagebox.showerror(title, message)
+    
+    def __del__(self):
+        """Destructor to ensure database connection is closed."""
+        try:
+            if hasattr(self, 'conn'):
+                self.conn.close()
+                print("Database connection closed.")
+        except Exception as e:
+            print(f"Error closing database connection: {e}")
+    
     def run(self):
         """Start the application's main loop."""
-        self.window.mainloop()
+        try:
+            self.window.mainloop()
+        except Exception as e:
+            print(f"Error in main loop: {e}")
+            self.show_error_message("Fatal Error", 
+                                  "Application encountered a fatal error.")
+        finally:
+            if hasattr(self, 'conn'):
+                self.conn.close()
 
 
 if __name__ == "__main__":

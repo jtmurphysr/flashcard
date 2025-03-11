@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.2] - 2024-03-11
+
+### Fixed
+- Database update failures in mark_known and mark_unknown
+- Added transaction management with proper commit/rollback
+- Added verification of database updates
+- Added detailed error logging for database operations
+- Improved error handling consistency between mark_known and mark_unknown
+
+### Added
+- Database connection health checks
+- Automatic reconnection attempts
+- Update verification with detailed logging
+- Row-level update confirmation
+
 ## [1.1.1] - 2024-03-11
 
 ### Changed
