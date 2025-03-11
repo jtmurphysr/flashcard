@@ -12,22 +12,29 @@ class FlashcardApp:
     FLIP_DELAY = 5000  # Time before card flips (ms)
     NEXT_CARD_DELAY = 3000  # Time before next card appears after flip (ms)
     
-    def __init__(self, db_path='flashcards.db', days_multiplier=7):
-        """Initialize the flashcard application."""
-        print(f"Connecting to database: {db_path}")  # Debug print
+    def __init__(self, db_path='flashcards.db', front_lang="Target", back_lang="Native", days_multiplier=7):
+        """Initialize the flashcard application.
+        
+        Args:
+            db_path (str): Path to the SQLite database
+            front_lang (str): Label for the front of the cards
+            back_lang (str): Label for the back of the cards
+            days_multiplier (int): Number of days to multiply by correct_count for spacing
+        """
+        print(f"Connecting to database: {db_path}")
         self.conn = sqlite3.connect(db_path)
         
         # Test the connection
         cursor = self.conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM flashcards')
         count = cursor.fetchone()[0]
-        print(f"Found {count} cards in database")  # Debug print
+        print(f"Found {count} cards in database")
         
         self.days_multiplier = days_multiplier
         self.current_cards = []
         self.current_card = None
-        self.front_lang = "Italian"
-        self.back_lang = "English"
+        self.front_lang = front_lang
+        self.back_lang = back_lang
         self.flip_timer = None
         self.next_card_timer = None
         

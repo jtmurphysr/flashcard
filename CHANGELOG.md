@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1] - 2024-03-11
+
+### Changed
+- Removed hardcoded language titles from cards
+- Added configurable front_lang and back_lang parameters to FlashcardApp
+- Updated launcher to pass language settings to FlashcardApp
+
 ## [1.1.0] - 2024-03-11
 
 ### Added
